@@ -1,66 +1,46 @@
 import dotenv from 'dotenv';
-dotenv.config();
 import mongoose from 'mongoose';
 import { connectDB } from '../config/db.js';
 import { Instructor } from '../models/Instructor.js';
 
-// Seed data for the Instructor Portal NoSQL injection lab.
-// Passwords are plaintext ON PURPOSE (see Instructor model / Flow.md).
+dotenv.config();
+
 const instructors = [
+  { name: 'Prof. Alice Smith', username: 'prof.smith', department: 'CS' },
+  { name: 'Prof. Brian Jones', username: 'prof.jones', department: 'Math' },
+  { name: 'Prof. Chen Lee', username: 'prof.lee', department: 'Math' },
   {
-    name: 'Prof. Alice Smith',
-    username: 'prof.smith',
-    password: 'password123',
-    department: 'CS',
-    role: 'instructor',
-    privateEmail: 'alice.smith@university.edu',
-    privatePhone: '+1-555-0101'
-  },
-  {
-    name: 'Prof. Brian Jones',
-    username: 'prof.jones',
-    password: 'mathRules!',
-    department: 'Math',
-    role: 'instructor',
-    privateEmail: 'brian.jones@university.edu',
-    privatePhone: '+1-555-0102'
-  },
-  {
-    name: 'Prof. Chen Lee',
-    username: 'prof.lee',
-    password: 'linalg2024',
-    department: 'Math',
-    role: 'instructor',
-    privateEmail: 'chen.lee@university.edu',
-    privatePhone: '+1-555-0103'
-  },
-  {
-    // The high-value target: the only superadmin, holding the API key.
     name: 'Portal Administrator',
     username: 'admin',
-    password: 'S3cr3t-Admin-Pw!',
     department: 'IT',
-    role: 'superadmin',
-    apiKey: 'acl_live_9f3b2c7d8e4a1b6f0d5c2a9e',
-    privateEmail: 'root@university.edu',
-    privatePhone: '+1-555-0000'
+    role: 'superadmin'
   }
 ];
 
-async function run() {
+async function seed() {
+  const password = process.env.INSTRUCTOR_SEED_PASSWORD;
+  if (!password) throw new Error('Set INSTRUCTOR_SEED_PASSWORD for the local demo accounts');
+
   await connectDB();
-  await Instructor.deleteMany({});
-  const created = await Instructor.insertMany(instructors);
-  console.log(`Seeded ${created.length} instructor(s):`);
-  for (const i of created) {
-    console.log(`  - ${i.username} (${i.role})`);
+  try {
+    await Instructor.init();
+    let created = 0;
+    for (const instructor of instructors) {
+      if (await Instructor.exists({ username: instructor.username })) continue;
+      try {
+        await Instructor.create({ ...instructor, password });
+        created += 1;
+      } catch (error) {
+        if (error.code !== 11000) throw error;
+      }
+    }
+    console.log('Created %d demo instructor account(s).', created);
+  } finally {
+    await mongoose.disconnect();
   }
-  await mongoose.disconnect();
-  console.log('Done.');
-  process.exit(0);
 }
 
-run().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
+seed().catch((error) => {
+  console.error('Instructor seeding failed:', error.message);
+  process.exitCode = 1;
 });
